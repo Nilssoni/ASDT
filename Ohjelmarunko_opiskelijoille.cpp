@@ -13,6 +13,13 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <cstring>
+#include <thread>
+#include <sys/ipc.h>
+#include <csignal>
+#include <mutex>
+#include <condition_variable>
+#include <chrono>
 
 //rinnakaisuuden peruskirjastot
 //OPISKLEIJA: lisää tarvittaessa lisää kirjastoja, muista käyttää -pthread lippua käännöksessä ja tarvittaessa -lrt lippua myös
@@ -36,10 +43,13 @@ using namespace std;
 //mieti harjoituksista opitun perusteella paljonko labyrintti vähintään tarvitsee jaettua muistia
 //tee kaikki ratkaisut niin että ohjelma toimii millä tahansa labyrintilla
 
+#define ROTAT 3
+
+/*
 //definet voi jättää globaalille alueelle, ne on sitten tiedossa koko tiedostossa
 #define KORKEUS 100 //rivien määrä alla
 #define LEVEYS 100 //sarakkaiden määrä alla
-int labyrintti[KORKEUS][LEVEYS] = {
+int alkuLabyrintti[KORKEUS][LEVEYS] = {
     {1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
     {1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,2,0,2,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,2,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,2,0,0,1,0,0,0,1,0,0,2,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,1,1},
     {1,1,1,1,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1,1,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1,0,1,1,1,1,1,0,1,1,1,0,1,1,1,0,1,0,1,1,1,0,1,1,1,1,1,1,1,1,1,1,1,0,1,0,1,1,1,1,1,0,1,0,1,0,1,1,1,0,1,1},
@@ -141,11 +151,11 @@ int labyrintti[KORKEUS][LEVEYS] = {
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1},
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,4,1,1},
 };
-
+*/
 //apuja: voit testata ratkaisujasi myös alla olevalla yksinkertaisemmalla labyrintilla 
-//#define KORKEUS 7
-//#define LEVEYS 7
-/*int labyrintti[KORKEUS][LEVEYS] = {
+#define KORKEUS 7
+#define LEVEYS 7
+int alkuLabyrintti[KORKEUS][LEVEYS] = {
                         {1,1,1,1,1,1,1},
                         {1,0,1,0,1,0,4},
                         {1,0,1,0,1,0,1},
@@ -153,7 +163,7 @@ int labyrintti[KORKEUS][LEVEYS] = {
                         {1,0,1,0,1,0,1},
                         {1,0,1,0,1,0,1},
                         {1,1,1,3,1,1,1}};
-*/
+
 
 //karttasijainnin tallettamiseen käytettävä rakenne, luotaessa alustuu vasempaan alakulmaan
 //HUOM! ykoordinaatti on peilikuva taulukon rivi-indeksiin
@@ -205,11 +215,18 @@ struct Karttavirhe {
     string msg;
 };
 
+struct rottaTulos {
+    int liikkeita;
+    bool paasiulos;
+    vector<Ristaus> kuljettuReitti;
+    Sijainti ulosKohta;
+};
 
 //tämä on esittely aloitusalgoritmifunktiolle mitä siis kutsutaan oli kyseessä prosessi eli säietoteutus
 //tällä hetkellä palauttaa kyseisen rotan liikkujen määrän labyrintin selvittämiseksi
 //OPISKELIJA: yhtenä mielenkiintoisena haasteena voisi olla liikkujen määrän optimointi rottien yhteistyötä kehittämällä
-int aloitaRotta();
+
+extern rottaTulos aloitaRotta(int (*labyrintti)[LEVEYS],int rottaId);
 
 //OPISKELIJA: lisää tarvittavat muut funktioesittelyt tähän niin koodin järjestykellä tiedostossa ei ole merkitystä
 
@@ -220,7 +237,7 @@ int aloitaRotta();
 //VINKKI: määrittele pointteri niin että olemassa olevissa algoritmeissa oleva koodi toimii sellaisenaan
 
 //etsii kartasta jotain spesifistä, palauttaa sen koordinaatit
-Sijainti etsiKartasta(int kohde){
+Sijainti etsiKartasta(int kohde, int (*labyrintti)[LEVEYS]){
     Sijainti kartalla;
     for (int y = 0; y<KORKEUS ; y++) {
         for (int x = 0; x<LEVEYS ; x++){
@@ -235,9 +252,9 @@ Sijainti etsiKartasta(int kohde){
 }
 
 //etsitään labyrintin aloituskohta, merkitty 3:lla
-Sijainti findBegin(){
+Sijainti findBegin(int (*labyrintti)[LEVEYS]){
     Sijainti alkusijainti;
-    alkusijainti = etsiKartasta(3);
+    alkusijainti = etsiKartasta(3, labyrintti);
     return alkusijainti;
 } 
 
@@ -249,7 +266,7 @@ Sijainti findBegin(){
 //OPISKLEIJA: käytä siis labyrinttia jaetusta muistista ja tee tarvittaessa siihen liittyvät muutokset
 
 //tutkitaan mitä nykypaikan yläpuolella on, prevDir kertoo minkä suuntainen oli viimeisin kyseisen rotan liikku
-bool tutkiUp(Sijainti nykysijainti, auto& reitti, LiikkumisSuunta prevDir){
+bool tutkiUp(Sijainti nykysijainti, auto& reitti, LiikkumisSuunta prevDir, int (*labyrintti)[LEVEYS]){
     int yindex = KORKEUS-1-nykysijainti.ykoord-1;
     if (yindex < 0) return false; //ulos kartalta - ei mahdollista 
     if (labyrintti[yindex][nykysijainti.xkoord] == 1) return false; //labyrintin seinä
@@ -270,7 +287,7 @@ bool tutkiUp(Sijainti nykysijainti, auto& reitti, LiikkumisSuunta prevDir){
     return true;
 }
 //..alapuolella
-bool tutkiDown(Sijainti nykysijainti, auto& reitti, LiikkumisSuunta prevDir){
+bool tutkiDown(Sijainti nykysijainti, auto& reitti, LiikkumisSuunta prevDir, int (*labyrintti)[LEVEYS]){
     int yindex = KORKEUS-1-nykysijainti.ykoord+1;
     if (yindex > KORKEUS-1) return false; //ulos kartalta - ei mahdollista 
     if (labyrintti[yindex][nykysijainti.xkoord] == 1) return false;
@@ -291,7 +308,7 @@ bool tutkiDown(Sijainti nykysijainti, auto& reitti, LiikkumisSuunta prevDir){
 }
 
 //..vasemmalla
-bool tutkiLeft(Sijainti nykysijainti, auto& reitti, LiikkumisSuunta prevDir){
+bool tutkiLeft(Sijainti nykysijainti, auto& reitti, LiikkumisSuunta prevDir, int (*labyrintti)[LEVEYS]){
     int yindex = KORKEUS-1-nykysijainti.ykoord;
     int xindex = nykysijainti.xkoord-1;
     if (xindex < 0) return false; //ulos kartalta - ei mahdollista
@@ -313,7 +330,7 @@ bool tutkiLeft(Sijainti nykysijainti, auto& reitti, LiikkumisSuunta prevDir){
 }
 
 //..oikealla
-bool tutkiRight(Sijainti nykysijainti, auto& reitti, LiikkumisSuunta prevDir){
+bool tutkiRight(Sijainti nykysijainti, auto& reitti, LiikkumisSuunta prevDir, int (*labyrintti)[LEVEYS]){
     int yindex = KORKEUS-1-nykysijainti.ykoord;
     int xindex = nykysijainti.xkoord+1;
     if (xindex > LEVEYS) return false; //ulos kartalta - ei mahdollista
@@ -336,33 +353,33 @@ bool tutkiRight(Sijainti nykysijainti, auto& reitti, LiikkumisSuunta prevDir){
 
 //tämä funktio palauttaa aina seuraavan lähtösuunnan ilman lisäehtoja
 //OPISKELIJA: älä muuta tätä funktiota suoraan vaan tee omille mahdollisille lisäehdoille oma(t) funktio(t) loogisesti oikeisiin paikkoihin
-LiikkumisSuunta findNext(bool onkoRistaus, Sijainti nykysijainti, LiikkumisSuunta prevDir, auto& reitti){
+LiikkumisSuunta findNext(bool onkoRistaus, Sijainti nykysijainti, LiikkumisSuunta prevDir, auto& reitti, int (*labyrintti)[LEVEYS]){
     if (!onkoRistaus) {        
-        if (tutkiLeft(nykysijainti, reitti, prevDir) && prevDir != RIGHT){
+        if (tutkiLeft(nykysijainti, reitti, prevDir, labyrintti) && prevDir != RIGHT){
         return LEFT;
         }
-        if (tutkiUp(nykysijainti, reitti, prevDir) && prevDir != DOWN){
+        if (tutkiUp(nykysijainti, reitti, prevDir, labyrintti) && prevDir != DOWN){
         return UP;
         }
-        if (tutkiDown(nykysijainti, reitti, prevDir) && prevDir != UP){
+        if (tutkiDown(nykysijainti, reitti, prevDir, labyrintti) && prevDir != UP){
         return DOWN;
         }
-        if (tutkiRight(nykysijainti, reitti, prevDir) && prevDir != LEFT){
+        if (tutkiRight(nykysijainti, reitti, prevDir, labyrintti) && prevDir != LEFT){
         return RIGHT;
         }
         return DEFAULT; //UMPIKUJA - palaa viimeisimpään risteykseen returnin jälkeen
     }
     else if (onkoRistaus) {
-        if (tutkiLeft(nykysijainti, reitti, prevDir) && reitti.back().tutkittavana != LEFT && !reitti.back().left.tutkittu){
+        if (tutkiLeft(nykysijainti, reitti, prevDir, labyrintti) && reitti.back().tutkittavana != LEFT && !reitti.back().left.tutkittu){
         return LEFT;
         }
-        if (tutkiUp(nykysijainti, reitti, prevDir) && reitti.back().tutkittavana != UP && !reitti.back().up.tutkittu){
+        if (tutkiUp(nykysijainti, reitti, prevDir, labyrintti) && reitti.back().tutkittavana != UP && !reitti.back().up.tutkittu){
         return UP;
         }
-        if (tutkiDown(nykysijainti, reitti, prevDir) && reitti.back().tutkittavana != DOWN && !reitti.back().down.tutkittu){
+        if (tutkiDown(nykysijainti, reitti, prevDir, labyrintti) && reitti.back().tutkittavana != DOWN && !reitti.back().down.tutkittu){
         return DOWN;
         }
-        if (tutkiRight(nykysijainti, reitti, prevDir) && reitti.back().tutkittavana != RIGHT && !reitti.back().right.tutkittu){
+        if (tutkiRight(nykysijainti, reitti, prevDir, labyrintti) && reitti.back().tutkittavana != RIGHT && !reitti.back().right.tutkittu){
         return RIGHT;
         }
         return DEFAULT; //palatun ristauksen kaikki suunnat käyty,return jälkeen risteyksen voi poistaa pinosta ja palata sitä edelliseen risteykseen
@@ -398,9 +415,9 @@ Sijainti moveRight(Sijainti nykysijainti){
 //pop_back() poistaa viimeisimmän lisätyn alkion (=pinon päältä)
 //tutkittavana - attribuutti kertoo (jää muistiin risteyksestä) minne suuntaan risteyksestä nyt lähdettiinkään
 //palauttaa suunnan mihin risteyksestä lähdetään
-LiikkumisSuunta doRistaus(Sijainti risteyssijainti, LiikkumisSuunta prevDir, auto& reitti){
+LiikkumisSuunta doRistaus(Sijainti risteyssijainti, LiikkumisSuunta prevDir, auto& reitti, int (*labyrintti)[LEVEYS]){
     LiikkumisSuunta nextDir; 
-    nextDir = findNext(true, risteyssijainti, prevDir, reitti); 
+    nextDir = findNext(true, risteyssijainti, prevDir, reitti, labyrintti); 
     //HUOM! päätös risteyksessä toimimisesta tehdään alla
     //OPISKELIJA: voit vaikuttaa päätöksentekoon, lisää oma toiminnallisuus omaan funktioonsa
     if (nextDir == LEFT) reitti.back().tutkittavana = LEFT;
@@ -424,10 +441,10 @@ LiikkumisSuunta doRistaus(Sijainti risteyssijainti, LiikkumisSuunta prevDir, aut
 //parametrina tässä siis voi/pitää antaa esimerkiksi että ollaanko prosessina vai threadinä liikkeellä
 //kuljeta parametria/parametreja tarvittavissa paikoissa ohjelmassa
 //ohjelman lopussa reitti vektorissa (käsitellään pinona) on oikean reitin risteykset ainoastaan
-int aloitaRotta(){
+rottaTulos aloitaRotta(int(*labyrintti)[LEVEYS],int rottaId){
     int liikkuCount=0;
     vector<Ristaus> reitti; //pinona käytettävä rotan kulkema reitti (pinossa kuljetut risteykset)
-    Sijainti rotanSijainti = findBegin(); //hae labyrintin alku
+    Sijainti rotanSijainti = findBegin(labyrintti); //hae labyrintin alku
     LiikkumisSuunta prevDir {DEFAULT}; //edellinen suunta:jottei kuljeta edestakaisin vahingossa
     LiikkumisSuunta nextDir {DEFAULT}; //seuraava suunta
     //pyöri labyrintissa kunnes ulostulo on löytynyt
@@ -440,10 +457,10 @@ int aloitaRotta(){
         //risteykset on labyrinttiin merkitty 2:lla ohjelmoinnin helpottamiseksi
         //risteyksen tutkimiselle on oma koodi alla
         if (labyrintti[KORKEUS-1-rotanSijainti.ykoord][rotanSijainti.xkoord] == 2){
-            nextDir = doRistaus(rotanSijainti, prevDir, reitti);
+            nextDir = doRistaus(rotanSijainti, prevDir, reitti, labyrintti);
         }
         //muuten tämä, eli "muu kuin risteys" koodi
-        else nextDir = findNext(false /* ei risteys */, rotanSijainti, prevDir, reitti);
+        else nextDir = findNext(false /* ei risteys */, rotanSijainti, prevDir, reitti, labyrintti);
         //huom! nykyimplementaatiossa jos vuoron alussa (eli yläpuolisissa kutsuissa) liikkuminen on todettu mahdolliseksi se myös tullaan tekemään, muuta tätä tarvittaessa
         //huom! jos on valittu risteykseenmeno niin ristaus on jo lisätty ristauspinoon tässä vaiheessa
         //huom! päätökset on jo tehty, tässä on vain päätösten toimeenpano
@@ -506,14 +523,65 @@ int aloitaRotta(){
 } // for //while    
     //ohjelman lopuksi palautetaan liikkujen määrä rottakohtaisesti
     //OPISKELIJA: voisit muuttaa paluuarvon rakenteeksi jossa olisi liikkujen määrän lisäksi myös oikea reitti eli jäljelle jäänyt risteyspino, pystyt sitten käyttämään sitä prosesseissa tai säikeissä
-    return liikkuCount;
+    rottaTulos tulos;
+    tulos.liikkeita = liikkuCount;
+    tulos.paasiulos = (labyrintti[KORKEUS-1-rotanSijainti.ykoord][rotanSijainti.xkoord] == 4);
+    tulos.kuljettuReitti = reitti;
+    tulos.ulosKohta = rotanSijainti;
+    return tulos;
 }
 
 //OPISKELIJA: nykyinen main on näin yksinkertainen, tästä pitää muokata se rinnakkaisuuden pohja
 int main(){
-    aloitaRotta();
+
+    int shmid = shmget(IPC_PRIVATE, sizeof(int) *KORKEUS *LEVEYS, IPC_CREAT | 0666);
+    if (shmid < 0){
+        perror("shmget");
+        return 1;
+    }
+
+    int (*jaettuLabyrintti)[LEVEYS] = (int (*)[LEVEYS]) shmat(shmid,nullptr,0);
+    if(jaettuLabyrintti == (void*) -1){
+        perror("shmat");
+        return 1;
+    }
+
+    for(int i = 0; i < KORKEUS; ++i){
+        for(int j = 0; j < LEVEYS; ++j){
+            jaettuLabyrintti[i][j] = alkuLabyrintti[i][j];
+        }
+    }
+    vector<pid_t> lapsiProsessit;
+    for(int i = 0; i < ROTAT; ++i){
+        pid_t pid = fork();
+        if(pid > 0){
+            lapsiProsessit.push_back(pid);
+        }
+        if(pid == 0){
+            rottaTulos tulos = aloitaRotta(jaettuLabyrintti, i);
+            cout << "Rotta " << i << (tulos.paasiulos ? " löysi ulos!" : " ei löytänyt ulos.") << endl;
+            cout << "Liikkeiden määrä: " << tulos.liikkeita << endl;
+            cout << "Ulos päästiin kohdasta: (" << tulos.ulosKohta.ykoord <<"," << tulos.ulosKohta.xkoord << ")" << endl;
+
+            cout << "Kuljettu reitti:" << endl;
+            for (const auto& r : tulos.kuljettuReitti) {
+                cout << "(" << r.kartalla.ykoord << "," << r.kartalla.xkoord << ")" << endl;
+            }
+            
+            shmdt(jaettuLabyrintti);
+            
+        }
+    }
+
+    for(int i = 0; i < ROTAT; ++i) wait(NULL);
+
+    //aloitaRotta();
     //tämän tulee kertoa että kaikki rotat ovat päässeet ulos labyrintista
     //viimeinen jäädytetty kuva sijaintikartasta olisi hyvä olla todistamassa sitä
     std::cout << "Kaikki rotat ulkona!" << endl;
+
+    shmdt(jaettuLabyrintti);
+    shmctl(shmid, IPC_RMID, nullptr);
+
     return 0;
 }
