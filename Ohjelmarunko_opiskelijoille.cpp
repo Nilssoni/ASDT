@@ -45,7 +45,7 @@ using namespace std;
 
 #define ROTAT 3
 
-/*
+
 //definet voi jättää globaalille alueelle, ne on sitten tiedossa koko tiedostossa
 #define KORKEUS 100 //rivien määrä alla
 #define LEVEYS 100 //sarakkaiden määrä alla
@@ -151,20 +151,22 @@ int alkuLabyrintti[KORKEUS][LEVEYS] = {
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1},
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,4,1,1},
 };
-*/
+
+/*
 //apuja: voit testata ratkaisujasi myös alla olevalla yksinkertaisemmalla labyrintilla 
 #define KORKEUS 7
 #define LEVEYS 7
 int alkuLabyrintti[KORKEUS][LEVEYS] = {
-                        {1,1,1,1,1,1,1},
-                        {1,0,1,0,1,0,4},
-                        {1,0,1,0,1,0,1},
-                        {1,2,0,2,0,2,1},
-                        {1,0,1,0,1,0,1},
-                        {1,0,1,0,1,0,1},
-                        {1,1,1,3,1,1,1}};
-
-
+    {1,1,1,1,1,1,1},
+    {1,0,1,0,1,0,4},
+    {1,0,1,0,1,0,1},
+    {1,2,0,2,0,2,1},
+    {1,0,1,0,1,0,1},
+    {1,0,1,0,1,0,1},
+    {1,1,1,3,1,1,1}};
+    
+    
+*/
 //karttasijainnin tallettamiseen käytettävä rakenne, luotaessa alustuu vasempaan alakulmaan
 //HUOM! ykoordinaatti on peilikuva taulukon rivi-indeksiin
 //PasiM: TODO, voisi yksinkertaistaa että ykoord olisi sama kuin rivi-indeksi
@@ -485,10 +487,10 @@ rottaTulos aloitaRotta(int(*labyrintti)[LEVEYS],int rottaId){
         //a)UMPIKUJASTA: (DEFAULT PALAUTETTU findNext() -> paluu edelliseen risteykseen
         //b)AIEMMIN PALATTIIN JO RISTEYKSEEN JONKA KAIKKI SUUNNAT tutkittu-attribuutti true: (DEFAULT PALAUTETTU doRistaus() -> poista risteys pinosta ja palaa edelliseen risteykseen
         case DEFAULT: //=paluu edelliseen risteykseen jossa käymättömiä reittejä
-        cout << "Umpikuja: " << "Ruutu: " << rotanSijainti.ykoord << "," << rotanSijainti.xkoord << endl; 
+        //cout << "Umpikuja: " << "Ruutu: " << rotanSijainti.ykoord << "," << rotanSijainti.xkoord << endl; 
         rotanSijainti.ykoord = reitti.back().kartalla.ykoord;
         rotanSijainti.xkoord = reitti.back().kartalla.xkoord;
-        cout << "Palattu: " << "Ruutu: " << rotanSijainti.ykoord << "," << rotanSijainti.xkoord << endl;
+        //cout << "Palattu: " << "Ruutu: " << rotanSijainti.ykoord << "," << rotanSijainti.xkoord << endl;
             switch (reitti.back().tutkittavana){
             case UP:
                 reitti.back().up.tutkittu = true;
@@ -532,7 +534,12 @@ rottaTulos aloitaRotta(int(*labyrintti)[LEVEYS],int rottaId){
 }
 
 //OPISKELIJA: nykyinen main on näin yksinkertainen, tästä pitää muokata se rinnakkaisuuden pohja
-int main(){
+int main(int argc, char* argv[]){
+
+    if(argc < 2){
+        cerr << "Anna suoritustapa: 'thread / fork'" << endl;
+        return 1;
+    }
 
     int shmid = shmget(IPC_PRIVATE, sizeof(int) *KORKEUS *LEVEYS, IPC_CREAT | 0666);
     if (shmid < 0){
@@ -551,29 +558,57 @@ int main(){
             jaettuLabyrintti[i][j] = alkuLabyrintti[i][j];
         }
     }
+
     vector<pid_t> lapsiProsessit;
-    for(int i = 0; i < ROTAT; ++i){
-        pid_t pid = fork();
-        if(pid > 0){
-            lapsiProsessit.push_back(pid);
-        }
-        if(pid == 0){
-            rottaTulos tulos = aloitaRotta(jaettuLabyrintti, i);
-            cout << "Rotta " << i << (tulos.paasiulos ? " löysi ulos!" : " ei löytänyt ulos.") << endl;
-            cout << "Liikkeiden määrä: " << tulos.liikkeita << endl;
-            cout << "Ulos päästiin kohdasta: (" << tulos.ulosKohta.ykoord <<"," << tulos.ulosKohta.xkoord << ")" << endl;
 
-            cout << "Kuljettu reitti:" << endl;
-            for (const auto& r : tulos.kuljettuReitti) {
-                cout << "(" << r.kartalla.ykoord << "," << r.kartalla.xkoord << ")" << endl;
+    string mood = argv[1];
+    if(mood == "fork"){
+        cout << "Käynnistetään prosessi rotat" << endl;        
+        for(int i = 0; i < ROTAT; ++i){
+            pid_t pid = fork();
+            if(pid > 0){
+                lapsiProsessit.push_back(pid);
             }
-            
-            shmdt(jaettuLabyrintti);
-            
+            if(pid == 0){
+                rottaTulos tulos = aloitaRotta(jaettuLabyrintti, i);
+                cout << "Rotta " << i << (tulos.paasiulos ? " löysi ulos!" : " ei löytänyt ulos.") << endl;
+                cout << "Liikkeiden määrä: " << tulos.liikkeita << endl;
+                cout << "Ulos päästiin kohdasta: (" << tulos.ulosKohta.ykoord <<"," << tulos.ulosKohta.xkoord << ")" << endl;
+                
+                cout << "Kuljettu reitti:" << endl;
+                for (const auto& r : tulos.kuljettuReitti) {
+                    cout << "(" << r.kartalla.ykoord << "," << r.kartalla.xkoord << ")" << endl;
+                }
+                
+                shmdt(jaettuLabyrintti);
+                exit(0);                
+            }
         }
+        
+        for(int i = 0; i < ROTAT; ++i) wait(NULL);
     }
-
-    for(int i = 0; i < ROTAT; ++i) wait(NULL);
+    else if(mood == "thread"){
+        cout << "Käynnistewtään säie rotat" << endl;
+        vector<thread> lankaRotat;
+        for(int i = 0; i < ROTAT; ++i){
+            lankaRotat.emplace_back([=](){
+                rottaTulos tulos = aloitaRotta(jaettuLabyrintti, i);
+                                cout << "Rotta " << i << (tulos.paasiulos ? " löysi ulos!" : " ei löytänyt ulos.") << endl;
+                cout << "Liikkeiden määrä: " << tulos.liikkeita << endl;
+                cout << "Ulos päästiin kohdasta: (" << tulos.ulosKohta.ykoord <<"," << tulos.ulosKohta.xkoord << ")" << endl;
+                
+                cout << "Kuljettu reitti:" << endl;
+                for (const auto& r : tulos.kuljettuReitti) {
+                    cout << "(" << r.kartalla.ykoord << "," << r.kartalla.xkoord << ")" << endl;
+                }
+            });
+        }
+        for(auto& t : lankaRotat) t.join();
+    }else{
+        cerr << "Tuntematon tila, käytä 'thread / fork'" << endl;
+        shmdt(jaettuLabyrintti);
+        return 1;
+    }
 
     //aloitaRotta();
     //tämän tulee kertoa että kaikki rotat ovat päässeet ulos labyrintista
