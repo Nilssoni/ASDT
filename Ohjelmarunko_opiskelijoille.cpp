@@ -554,7 +554,7 @@ int main(int argc, char* argv[]){
         return 1;
     }
 
-    // 3. prosessien välinen jaetun muistin toteutus ja ylipäätään jaettu muisti on käytössä koko ohjelmassa
+    // 3. Prosessien välinen jaetun muistin toteutus ja ylipäätään jaettu muisti on käytössä koko ohjelmassa
     int (*jaettuLabyrintti)[LEVEYS] = (int (*)[LEVEYS]) shmat(shmid,nullptr,0);
     if(jaettuLabyrintti == (void*) -1){
         perror("shmat");
@@ -569,7 +569,7 @@ int main(int argc, char* argv[]){
 
     vector<pid_t> lapsiProsessit;
 
-    // 1. rinnakkainen prosessitoteutus
+    // 1. Rinnakkainen prosessitoteutus
     string mood = argv[1];
     if(mood == "fork"){
         cout << "Käynnistetään prosessi rotat" << endl;        
@@ -594,6 +594,7 @@ int main(int argc, char* argv[]){
             }
         }
 
+        // 5. Prosessien suspend-toiminnallisuus
         // // Snapshot-tiedoston avaaminen
         ofstream snapshot("labyrintti_snapshot.txt");
 
@@ -623,7 +624,7 @@ int main(int argc, char* argv[]){
 
         for(int i = 0; i < ROTAT; ++i) wait(NULL);
     }
-    // 2. rinnakkainen säietoteutus
+    // 2. Rinnakkainen säietoteutus
     else if(mood == "thread"){
         cout << "Käynnistetään säie rotat" << endl;
         vector<thread> lankaRotat;
