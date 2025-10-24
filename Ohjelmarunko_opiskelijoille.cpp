@@ -20,6 +20,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <chrono>
+#include <fstream>
 
 //rinnakaisuuden peruskirjastot
 //OPISKLEIJA: lisää tarvittaessa lisää kirjastoja, muista käyttää -pthread lippua käännöksessä ja tarvittaessa -lrt lippua myös
@@ -45,7 +46,7 @@ using namespace std;
 
 #define ROTAT 3
 
-
+/*
 //definet voi jättää globaalille alueelle, ne on sitten tiedossa koko tiedostossa
 #define KORKEUS 100 //rivien määrä alla
 #define LEVEYS 100 //sarakkaiden määrä alla
@@ -151,8 +152,8 @@ int alkuLabyrintti[KORKEUS][LEVEYS] = {
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1,1},
     {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,4,1,1},
 };
+*/
 
-/*
 //apuja: voit testata ratkaisujasi myös alla olevalla yksinkertaisemmalla labyrintilla 
 #define KORKEUS 7
 #define LEVEYS 7
@@ -166,7 +167,7 @@ int alkuLabyrintti[KORKEUS][LEVEYS] = {
     {1,1,1,3,1,1,1}};
     
     
-*/
+
 //karttasijainnin tallettamiseen käytettävä rakenne, luotaessa alustuu vasempaan alakulmaan
 //HUOM! ykoordinaatti on peilikuva taulukon rivi-indeksiin
 //PasiM: TODO, voisi yksinkertaistaa että ykoord olisi sama kuin rivi-indeksi
@@ -217,7 +218,8 @@ struct Karttavirhe {
     string msg;
 };
 
-struct rottaTulos {
+
+struct rottaTulos { 
     int liikkeita;
     bool paasiulos;
     vector<Ristaus> kuljettuReitti;
@@ -232,6 +234,7 @@ extern rottaTulos aloitaRotta(int (*labyrintti)[LEVEYS],int rottaId);
 
 //OPISKELIJA: lisää tarvittavat muut funktioesittelyt tähän niin koodin järjestykellä tiedostossa ei ole merkitystä
 
+mutex tulostusLukko; // 4. säikeiden välinen eksklusiivisuus
 
 //Rotta-ohjelman algoritmimäärittelyt
 //näitä kutsutaan-oli rinnakkaisuus mitä vain
@@ -281,9 +284,11 @@ bool tutkiUp(Sijainti nykysijainti, auto& reitti, LiikkumisSuunta prevDir, int (
         ristaus.down.jatkom = OPENING;
         reitti.push_back(ristaus); //lisätään risteys pinon päällimmäiseksi
 // debuggausapuja..:
-//        for (auto rist : reitti){
-//            cout << "Risteys: " << rist.kartalla.ykoord << "," << rist.kartalla.xkoord << endl;
-//        }
+        {
+        lock_guard<mutex> lukko(tulostusLukko);
+        for (auto rist : reitti){
+            cout << "Risteys ylös: " << rist.kartalla.ykoord << "," << rist.kartalla.xkoord << endl;
+        }}
         return true;
     }
     return true;
@@ -301,9 +306,11 @@ bool tutkiDown(Sijainti nykysijainti, auto& reitti, LiikkumisSuunta prevDir, int
         ristaus.up.tutkittu = true;
         ristaus.up.jatkom = OPENING;
         reitti.push_back(ristaus);
-//        for (auto rist : reitti){
-//            cout << "Risteys: " << rist.kartalla.ykoord << "," << rist.kartalla.xkoord << endl;
-//        }
+        {
+        lock_guard<mutex> lukko(tulostusLukko);
+        for (auto rist : reitti){
+            cout << "Risteys alas: " << rist.kartalla.ykoord << "," << rist.kartalla.xkoord << endl;
+        }}
         return true;
     }
     return true;
@@ -547,6 +554,7 @@ int main(int argc, char* argv[]){
         return 1;
     }
 
+    // 3. prosessien välinen jaetun muistin toteutus ja ylipäätään jaettu muisti on käytössä koko ohjelmassa
     int (*jaettuLabyrintti)[LEVEYS] = (int (*)[LEVEYS]) shmat(shmid,nullptr,0);
     if(jaettuLabyrintti == (void*) -1){
         perror("shmat");
@@ -561,6 +569,7 @@ int main(int argc, char* argv[]){
 
     vector<pid_t> lapsiProsessit;
 
+    // 1. rinnakkainen prosessitoteutus
     string mood = argv[1];
     if(mood == "fork"){
         cout << "Käynnistetään prosessi rotat" << endl;        
@@ -584,23 +593,53 @@ int main(int argc, char* argv[]){
                 exit(0);                
             }
         }
-        
+
+        // // Snapshot-tiedoston avaaminen
+        ofstream snapshot("labyrintti_snapshot.txt");
+
+        for(int kierros = 0; kierros < 5; ++kierros){
+            usleep(500000); // 0.5 sekunttia
+            
+            // Jäädytä kaikki lapsiprosessit
+            for(pid_t pid : lapsiProsessit){
+                kill(pid,SIGSTOP);
+            }
+
+            // Tallenna labyrintin tilanne
+            for(int i = 0; i < KORKEUS; ++i){
+                for(int j = 0; j < LEVEYS; ++j){
+                    snapshot << jaettuLabyrintti[i][j] << " ";
+                }
+                snapshot << "\n";
+            }
+            snapshot << "\n"; // Tyhjä rivi snapshottien väliin
+
+            // Jatka kaikkien lapsiprosessien toimintaa
+            for(pid_t pid : lapsiProsessit){
+                kill(pid, SIGCONT);
+            }
+        }
+        snapshot.close();
+
         for(int i = 0; i < ROTAT; ++i) wait(NULL);
     }
+    // 2. rinnakkainen säietoteutus
     else if(mood == "thread"){
-        cout << "Käynnistewtään säie rotat" << endl;
+        cout << "Käynnistetään säie rotat" << endl;
         vector<thread> lankaRotat;
         for(int i = 0; i < ROTAT; ++i){
             lankaRotat.emplace_back([=](){
                 rottaTulos tulos = aloitaRotta(jaettuLabyrintti, i);
-                                cout << "Rotta " << i << (tulos.paasiulos ? " löysi ulos!" : " ei löytänyt ulos.") << endl;
+                {
+                lock_guard<mutex> lukko(tulostusLukko);
+                cout << "Rotta " << i << (tulos.paasiulos ? " löysi ulos!" : " ei löytänyt ulos.") << endl;
                 cout << "Liikkeiden määrä: " << tulos.liikkeita << endl;
                 cout << "Ulos päästiin kohdasta: (" << tulos.ulosKohta.ykoord <<"," << tulos.ulosKohta.xkoord << ")" << endl;
                 
                 cout << "Kuljettu reitti:" << endl;
                 for (const auto& r : tulos.kuljettuReitti) {
                     cout << "(" << r.kartalla.ykoord << "," << r.kartalla.xkoord << ")" << endl;
-                }
+                }}
             });
         }
         for(auto& t : lankaRotat) t.join();
